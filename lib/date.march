@@ -1,7 +1,18 @@
+-- FinanceDate — Strict Gregorian civil dates and bounded day arithmetic, without timezone,
+-- market calendar or business-day assumptions. Supported years are 0001..9999.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceDate do
+  -- Opaque validated Gregorian date. Stored representation is private; construct with parse
+  -- and render with format.
   opaque type Date = CivilDate(DateTime.DateTime)
 
-  doc "Strict Gregorian YYYY-MM-DD, years 0001 through 9999. No market calendar assumptions."
+  doc """
+  Parse exactly YYYY-MM-DD, years 0001..9999. Invalid grammar, nonexistent dates and
+  out-of-range years return InvalidMetadata. Example: parse("2024-02-29") succeeds;
+  parse("2023-02-29") fails.
+  """
   fn parse(text : String) : Result(Date, FinanceError.Error) do
     if String.byte_size(text) != 10 || String.slice_bytes(text, 0, 4) == "0000" do Err(FinanceError.InvalidMetadata)
     else
@@ -11,11 +22,19 @@ mod FinanceDate do
     end
   end
 
+  doc """
+  Return date as canonical YYYY-MM-DD. Infallible for a validated Date; no locale or
+  timezone conversion occurs.
+  """
   fn format(date : Date) : String do
     match date do CivilDate(dt) -> DateTime.format(dt, "%Y-%m-%d") end
   end
 
-  doc "Bounded civil-day arithmetic; rejects results outside the supported year range."
+  doc """
+  Return date shifted by signed civil days, refined to -3652058..3652058. Invalid delta or
+  result outside years 0001..9999 returns InvalidMetadata. Counts every calendar day, not
+  business days; original date is unchanged.
+  """
   fn add_days(date : Date, days : {Int | _ >= -3652058 && _ <= 3652058}) : Result(Date, FinanceError.Error) do
     if days < -3652058 || days > 3652058 do Err(FinanceError.InvalidMetadata)
     else match date do

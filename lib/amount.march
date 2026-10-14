@@ -1,19 +1,43 @@
+-- FinanceAmount — Signed, arbitrary-size atom quantities tied to an asset identity and
+-- precision. Operations are pure; parsing is exact and rounding occurs only when
+-- explicitly requested by rescale. One atom is 10^-precision whole units.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceAmount do
+  -- Opaque signed BigInt atom count and validated asset. Zero and negative quantities are
+  -- permitted; positive-only posting rules belong to ledger.
   opaque type Quantity = QuantityValue(FinanceAsset.Asset, BigInt.BigInt)
-  doc "Construct a signed exact quantity in the asset's smallest unit."
+  doc """
+  Construct q from validated asset a and signed integer units without rounding.
+  Infallible; units are atoms, not whole units. For USD precision 2, 1250 atoms formats as
+  12.50.
+  """
   fn from_atoms(a : FinanceAsset.Asset, units : BigInt.BigInt) : Quantity do
     QuantityValue(a, units)
   end
 
+  doc """
+  Return q's signed arbitrary-size atom coefficient. Interpret it using
+  quantity_asset(q)'s precision; do not compare counts of different assets as economic
+  values.
+  """
   fn atoms(q : Quantity) : BigInt.BigInt do
     match q do QuantityValue(_, units) -> units end
   end
 
+  doc """
+  Return the validated asset carried by q, including its native accounting precision.
+  Infallible and does not alter q.
+  """
   fn quantity_asset(q : Quantity) : FinanceAsset.Asset do
     match q do QuantityValue(a, _) -> a end
   end
 
-  doc "Add quantities only when identity and precision agree."
+  doc """
+  Return a + b when identity and precision both agree; otherwise return AssetMismatch.
+  BigInt addition is exact and permits signed/zero results. Inputs are unchanged.
+  """
   fn add(a : Quantity, b : Quantity) : Result(Quantity, FinanceError.Error) do
     let aa = quantity_asset(a)
     let ab = quantity_asset(b)
@@ -22,12 +46,18 @@ mod FinanceAmount do
     else Err(FinanceError.AssetMismatch) end
   end
 
-  doc "Negate an exact quantity without changing its asset."
+  doc """
+  Return q with the atom sign reversed and asset unchanged. Infallible; zero remains zero
+  and no rounding occurs.
+  """
   fn negate(q : Quantity) : Quantity do
     from_atoms(quantity_asset(q), BigInt.negate(atoms(q)))
   end
 
-  doc "Subtract quantities, rejecting conflicting asset identities or precision."
+  doc """
+  Return a - b, requiring matching asset identity and precision or AssetMismatch.
+  Subtraction is exact; a negative result is valid and does not signal insufficient funds.
+  """
   fn sub(a : Quantity, b : Quantity) : Result(Quantity, FinanceError.Error) do
     add(a, negate(b))
   end
@@ -45,7 +75,12 @@ mod FinanceAmount do
       BigInt.add(BigInt.mul(acc, BigInt.from_int(10)), BigInt.from_int(value)))
   end
 
-  doc "Parse strict decimal text. Reject excess precision; never round silently."
+  doc """
+  Parse text exactly into a's atoms: optional minus, digits, optional dot followed by
+  digits. Reject whitespace, plus, exponent or incomplete decimals with InvalidDecimal;
+  excess fractional digits (even zeros) yield PrecisionExceeded. Example: parse(usd,
+  "12.50").
+  """
   fn parse(a : FinanceAsset.Asset, text : String) : Result(Quantity, FinanceError.Error) do
     let negative = String.starts_with(text, "-")
     let body = if negative do String.slice_bytes(text, 1, String.byte_size(text) - 1) else text end
@@ -67,7 +102,11 @@ mod FinanceAmount do
     end
   end
 
-  doc "Format with the asset's full precision; zero has no negative sign."
+  doc """
+  Return decimal text padded to q's full native precision, with no exponent. Negative zero
+  normalizes to zero. Infallible; this is exact interchange text, not locale-aware
+  display.
+  """
   fn format(q : Quantity) : String do
     let units = atoms(q)
     let places = FinanceAsset.precision(quantity_asset(q))
@@ -78,7 +117,12 @@ mod FinanceAmount do
     if places == 0 do sign ++ raw
     else sign ++ String.slice_bytes(padded, 0, n - places) ++ "." ++ String.slice_bytes(padded, n - places, places) end
   end
-  doc "Change accounting precision for the same asset using an explicit rounding policy."
+  doc """
+  Return q at places (0..255) for the same asset identity. Increasing precision is exact;
+  decreasing it calls the explicit policy. Exact can return Inexact; invalid runtime
+  places return InvalidPrecision. Never mutates the original asset or performs currency
+  conversion.
+  """
   fn rescale(q : Quantity, places : {Int | _ >= 0 && _ <= 255}, policy : FinanceRounding.Policy) : Result(Quantity, FinanceError.Error) do
     let a = quantity_asset(q)
     let? target = FinanceAsset.asset(FinanceAsset.asset_id(a), places)

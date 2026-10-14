@@ -1,22 +1,47 @@
+-- FinanceAsset — Canonical asset identity and declared accounting precision. Pure smart
+-- constructors return Result; no currency registry, address validation or decimal lookup
+-- is performed. Callers own identifier canonicalization. Use this module before
+-- constructing FinanceAmount quantities.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceAsset do
+  -- Validated identity string with precision in 0..255. Constructor is opaque. Equal ticker
+  -- text does not establish asset equality; arithmetic compares identity and precision.
   opaque type Asset = AssetValue(String, {Int | _ >= 0 && _ <= 255})
-  doc "Construct an asset using a canonical identity and native decimal precision."
+  doc """
+  Construct an asset from canonical id and decimal precision. Reject empty IDs or
+  characters <= ASCII space with InvalidAssetId; reject precision outside 0..255 with
+  InvalidPrecision. Spelling is preserved. Example: asset("internal:credits", 0).
+  """
   fn asset(id : String, precision : Int) : Result(Asset, FinanceError.Error) do
     if String.is_empty(id) || List.any(string_chars(id), fn c -> c <= " ") do Err(FinanceError.InvalidAssetId)
     else if precision < 0 || precision > 255 do Err(FinanceError.InvalidPrecision)
     else Ok(AssetValue(id, precision)) end end
   end
 
+  doc """
+  Return the exact identity string stored in a. No normalization or ticker lookup occurs;
+  precision is not included in this string.
+  """
   fn asset_id(a : Asset) : String do
     match a do AssetValue(id, _) -> id end
   end
 
+  doc """
+  Return a's declared fractional decimal places, refined to 0..255. Constructors enforce
+  this range at runtime; this does not imply every downstream solver obligation is proven.
+  """
   fn precision(a : Asset) : {Int | _ >= 0 && _ <= 255} do
     match a do AssetValue(_, places) -> places end
   end
 
 
-  doc "ISO-shaped fiat identifier: three uppercase ASCII letters. No currency registry is implied."
+  doc """
+  Construct identity fiat:CODE from code and places. Code must be exactly three uppercase
+  ASCII letters or InvalidAssetId is returned; places uses asset's 0..255 check. No ISO
+  membership or native precision is inferred. Example: fiat("USD", 2).
+  """
   fn fiat(code : String, places : Int) : Result(Asset, FinanceError.Error) do
     if String.byte_size(code) == 3 && List.all(string_chars(code), fn c -> c >= "A" && c <= "Z") do
       asset("fiat:" ++ code, places)
@@ -25,12 +50,21 @@ mod FinanceAsset do
 
   pfn component(s : String) : String do int_to_string(String.byte_size(s)) ++ ":" ++ s end
 
+  doc """
+  Construct a native asset from nonempty chain and places. Chain is byte-length-prefixed
+  to avoid delimiter collisions; invalid components/precision propagate asset errors. Does
+  not identify a chain from a ticker or validate its existence.
+  """
   fn native(chain : String, places : Int) : Result(Asset, FinanceError.Error) do
     if String.is_empty(chain) do Err(FinanceError.InvalidAssetId)
     else asset("native:" ++ component(chain), places) end
   end
 
-  doc "Length-prefix chain and contract/mint identifiers to avoid delimiter collisions."
+  doc """
+  Construct a token asset from nonempty chain and contract/mint plus places. Length-prefix
+  both components; preserve case. Return InvalidAssetId for empty/invalid components,
+  InvalidPrecision outside 0..255. No address checksum or token-decimal lookup occurs.
+  """
   fn token(chain : String, contract : String, places : Int) : Result(Asset, FinanceError.Error) do
     if String.is_empty(chain) || String.is_empty(contract) do Err(FinanceError.InvalidAssetId)
     else asset("token:" ++ component(chain) ++ ":" ++ component(contract), places) end

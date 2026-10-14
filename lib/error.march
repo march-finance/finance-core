@@ -1,3 +1,13 @@
+-- FinanceError — Structured validation errors shared by finance-core operations. Match
+-- variants rather than parsing messages; callers decide how to report or recover from
+-- invalid input.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceError do
+  -- InvalidAssetId/InvalidPrecision: asset definition; AssetMismatch: identity or precision
+  -- disagreement; InvalidDecimal/PrecisionExceeded: exact parsing;
+  -- DivisionByZero/Inexact/InvalidRate: arithmetic; InvalidMetadata: provenance or
+  -- date/range; InvalidEncoding: quantity wire schema.
   type Error = InvalidAssetId | InvalidPrecision | AssetMismatch | InvalidDecimal | PrecisionExceeded | DivisionByZero | Inexact | InvalidRate | InvalidMetadata | InvalidEncoding
 end

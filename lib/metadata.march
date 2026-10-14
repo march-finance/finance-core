@@ -1,7 +1,20 @@
+-- FinanceMetadata — Explicit provenance with source-scoped external identity and
+-- effective/recorded UTC Unix seconds. Pure constructors do not read a clock, trim
+-- accepted spelling or enforce event uniqueness.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceMetadata do
+  -- Opaque nonblank source, effective/recorded Int Unix seconds and optional nonblank
+  -- external ID, with effective <= recorded. Negative timestamps are permitted.
   opaque type Metadata = MetadataValue(String, Int, Int, Option(String))
 
-  doc "UTC Unix seconds, supplied by callers: no ambient clock dependency."
+  doc """
+  Construct provenance from source, effective/recorded UTC Unix seconds and optional
+  external_id. InvalidMetadata for blank source/present ID or effective > recorded.
+  Accepted strings are preserved, not trimmed. Example: make("import", 100, 101,
+  Some("event-1")).
+  """
   fn make(source : String, effective : Int, recorded : Int, external_id : Option(String)) : Result(Metadata, FinanceError.Error) do
     let valid_id = match external_id do
       None -> true
@@ -12,8 +25,24 @@ mod FinanceMetadata do
     else Ok(MetadataValue(source, effective, recorded, external_id)) end
   end
 
+  doc """
+  Return the exact caller-supplied source namespace. Infallible; source and external_id
+  together form a ledger replay key.
+  """
   fn source(m : Metadata) : String do match m do MetadataValue(s, _, _, _) -> s end end
+  doc """
+  Return effective UTC Unix seconds supplied at construction. Infallible; no clock
+  conversion or freshness guarantee is implied.
+  """
   fn effective(m : Metadata) : Int do match m do MetadataValue(_, t, _, _) -> t end end
+  doc """
+  Return recorded UTC Unix seconds supplied at construction. Infallible. Preserve this
+  value across retries rather than recomputing ingestion time.
+  """
   fn recorded(m : Metadata) : Int do match m do MetadataValue(_, _, t, _) -> t end end
+  doc """
+  Return None or the preserved external event ID. Infallible; this module validates
+  nonblank content but does not enforce uniqueness.
+  """
   fn external_id(m : Metadata) : Option(String) do match m do MetadataValue(_, _, _, id) -> id end end
 end

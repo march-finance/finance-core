@@ -1,15 +1,35 @@
+-- FinanceQuote — Directional rates with explicit observation provenance. Pure quote
+-- construction does not fetch prices, enforce expiry or decide whether a market source is
+-- trustworthy.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceQuote do
+  -- Opaque validated FinanceRate.Rate paired with FinanceMetadata.Metadata. Both inputs
+  -- retain their existing invariants.
   opaque type Quote = QuoteValue(FinanceRate.Rate, FinanceMetadata.Metadata)
 
-  doc "Attach explicit source and observation/recording times to a directional rate."
+  doc """
+  Pair rate and metadata into an immutable Quote. Infallible for already validated inputs;
+  does not check market freshness or rate/source consistency.
+  """
   fn make(rate : FinanceRate.Rate, metadata : FinanceMetadata.Metadata) : Quote do
     QuoteValue(rate, metadata)
   end
 
+  doc """
+  Return the quote's immutable observation provenance. Infallible; times remain
+  caller-supplied UTC Unix seconds.
+  """
   fn metadata(q : Quote) : FinanceMetadata.Metadata do
     match q do QuoteValue(_, meta) -> meta end
   end
 
+  doc """
+  Convert amount with the quote's rate and explicit policy, returning
+  FinanceRate.Conversion. Propagate AssetMismatch, Inexact or other rate errors. Metadata
+  is not copied into the conversion report; retain the quote for provenance.
+  """
   fn convert(q : Quote, amount : FinanceAmount.Quantity, policy : FinanceRounding.Policy) : Result(FinanceRate.Conversion, FinanceError.Error) do
     match q do QuoteValue(rate, _) -> FinanceRate.convert_report(rate, amount, policy) end
   end

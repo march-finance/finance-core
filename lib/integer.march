@@ -1,5 +1,14 @@
+-- FinanceInteger — Arbitrary-size signed integer division used by financial rounding. Pure
+-- long division avoids narrowing BigInt operands to machine integers.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceInteger do
-  doc "Magnitude long division for arbitrary size integers, with signed truncation toward zero."
+  doc """
+  Return (quotient, remainder) for n / d, truncating quotient toward zero. n = quotient*d
+  + remainder; abs(remainder) < abs(d), and nonzero remainder has n's sign. Accept signed
+  divisors; zero d returns DivisionByZero. Example: -7 / 3 gives (-2, -1).
+  """
   fn divmod(n : BigInt.BigInt, d : BigInt.BigInt) : Result((BigInt.BigInt, BigInt.BigInt), FinanceError.Error) do
     if BigInt.is_zero(d) do Err(FinanceError.DivisionByZero)
     else

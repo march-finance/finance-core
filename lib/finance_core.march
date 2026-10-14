@@ -1,14 +1,65 @@
+-- FinanceCore — Convenience facade forwarding asset and amount operations without changing
+-- their contracts. Prefer specialized modules for fiat/token factories, rates, metadata,
+-- dates or codecs. Pure; no independent data representation.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceCore do
+  doc """
+  Forward to FinanceAsset.asset(id, places). Return a validated asset or
+  InvalidAssetId/InvalidPrecision; preserve canonical spelling.
+  """
   fn asset(id, places) do FinanceAsset.asset(id, places) end
+  doc """
+  Forward to FinanceAsset.asset_id(a); return the exact stored identity string without
+  normalization.
+  """
   fn asset_id(a) do FinanceAsset.asset_id(a) end
+  doc """
+  Forward to FinanceAsset.precision(a); return declared decimal places refined to 0..255.
+  """
   fn precision(a) : {Int | _ >= 0 && _ <= 255} do FinanceAsset.precision(a) end
+  doc """
+  Forward to FinanceAmount.from_atoms(a, units). Infallibly attach signed BigInt atoms,
+  not whole units, to validated asset a.
+  """
   fn from_atoms(a, units) do FinanceAmount.from_atoms(a, units) end
+  doc """
+  Forward to FinanceAmount.atoms(q); return the signed arbitrary-size atom count.
+  """
   fn atoms(q) do FinanceAmount.atoms(q) end
+  doc """
+  Forward to FinanceAmount.quantity_asset(q); return its asset and precision without
+  conversion.
+  """
   fn quantity_asset(q) do FinanceAmount.quantity_asset(q) end
+  doc """
+  Forward to FinanceAmount.add(a, b); exact sum or AssetMismatch for differing
+  identity/precision.
+  """
   fn add(a, b) do FinanceAmount.add(a, b) end
+  doc """
+  Forward to FinanceAmount.sub(a, b); exact signed difference or AssetMismatch.
+  """
   fn sub(a, b) do FinanceAmount.sub(a, b) end
+  doc """
+  Forward to FinanceAmount.negate(q); infallibly reverse sign without changing asset.
+  """
   fn negate(q) do FinanceAmount.negate(q) end
+  doc """
+  Forward to FinanceAmount.parse(a, text); exact decimal construction, returning
+  InvalidDecimal or PrecisionExceeded for invalid input. Example: parse(usd, "12.50").
+  """
   fn parse(a, text) do FinanceAmount.parse(a, text) end
+  doc """
+  Forward to FinanceAmount.format(q); return full-precision decimal text with normalized
+  zero.
+  """
   fn format(q) do FinanceAmount.format(q) end
+  doc """
+  Forward to FinanceAmount.rescale(q, places, policy). Return same identity at new
+  precision 0..255; Exact may return Inexact when atoms would be lost. This is not
+  currency conversion.
+  """
   fn rescale(q, places : {Int | _ >= 0 && _ <= 255}, policy) do FinanceAmount.rescale(q, places, policy) end
 end

@@ -1,5 +1,16 @@
+-- FinanceRate — Positive directional rational exchange rates, quoted in target whole units
+-- per source whole unit. Conversion rounds once to target atoms and can report the exact
+-- residual. No market prices are fetched.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceRate do
+  -- Opaque source asset, target asset and positive numerator/denominator. Rational
+  -- components need not be reduced. Direction and both assets' precision matter.
   opaque type Rate = RateValue(FinanceAsset.Asset, FinanceAsset.Asset, BigInt.BigInt, BigInt.BigInt)
+  -- Audited conversion: quantity is rounded target Quantity;
+  -- residual_numerator/residual_denominator is exact minus rounded in TARGET ATOMS (not
+  -- whole units); policy is the applied Policy. Residual fraction need not be reduced.
   type Conversion = {
     quantity : FinanceAmount.Quantity,
     residual_numerator : BigInt.BigInt,
@@ -7,24 +18,41 @@ mod FinanceRate do
     policy : FinanceRounding.Policy
   }
 
-  doc "Quote target whole units per source whole unit as a positive exact rational."
+  doc """
+  Construct target whole units per source whole unit as numerator/denominator. Both must
+  be strictly positive or InvalidRate is returned. No reduction or price validation is
+  implied. Example: USD->EUR with 9/10 converts USD 12.50 to EUR 11.25.
+  """
   fn make(source : FinanceAsset.Asset, target : FinanceAsset.Asset, numerator : BigInt.BigInt, denominator : BigInt.BigInt) : Result(Rate, FinanceError.Error) do
     if BigInt.is_positive(numerator) && BigInt.is_positive(denominator) do
       Ok(RateValue(source, target, numerator, denominator))
     else Err(FinanceError.InvalidRate) end
   end
 
+  doc """
+  Return the opposite-direction rate by swapping source/target and numerator/denominator.
+  Infallible because make guarantees positive components; no rounding occurs.
+  """
   fn invert(rate : Rate) : Rate do
     match rate do RateValue(source, target, n, d) -> RateValue(target, source, d, n) end
   end
 
-  doc "Convert signed quantities; round once at the destination atom boundary."
+  doc """
+  Return the target Quantity for rate and signed q using policy. AssetMismatch means q
+  differs from rate's source identity/precision; Exact may return Inexact. Uses
+  convert_report's single target-atom rounding and discards its residual.
+  """
   fn convert(rate : Rate, q : FinanceAmount.Quantity, policy : FinanceRounding.Policy) : Result(FinanceAmount.Quantity, FinanceError.Error) do
     let? report = convert_report(rate, q, policy)
     Ok(report.quantity)
   end
 
-  doc "Residual is exact value minus rounded value, measured in destination atoms."
+  doc """
+  Convert signed q and return quantity, applied policy and exact signed residual in target
+  atoms. Require source identity/precision or AssetMismatch; invalid precision returns
+  InvalidPrecision, and Exact may return Inexact. Residual = exact target atoms minus
+  rounded atoms, not an additional posting.
+  """
   fn convert_report(rate : Rate, q : FinanceAmount.Quantity, policy : FinanceRounding.Policy) : Result(Conversion, FinanceError.Error) do
     match rate do
       RateValue(source, target, n, d) ->

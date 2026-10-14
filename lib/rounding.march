@@ -1,8 +1,20 @@
+-- FinanceRounding — Explicit financial rounding at an integer boundary. Policies work on
+-- signed values; no ambient/global rounding mode is consulted.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceRounding do
+  -- Exact rejects a nonzero remainder; TowardZero truncates; AwayFromZero increases
+  -- magnitude; Floor/Ceiling target negative/positive infinity; HalfAway rounds nearest ties
+  -- away from zero; HalfEven rounds nearest ties to an even integer.
   type Policy = Exact | TowardZero | AwayFromZero | Floor | Ceiling | HalfAway | HalfEven
   derive Eq for Policy
 
-  doc "Divide signed integers with an explicit policy; denominator must be positive."
+  doc """
+  Round signed n/d to a BigInt using policy, requiring positive d. Zero d returns
+  DivisionByZero; negative d returns InvalidRate; Exact with a remainder returns Inexact.
+  Example: divide(-25, 10, HalfEven) yields -2, while HalfAway yields -3.
+  """
   fn divide(n : BigInt.BigInt, d : BigInt.BigInt, policy : Policy) : Result(BigInt.BigInt, FinanceError.Error) do
     if BigInt.is_zero(d) do Err(FinanceError.DivisionByZero)
     else if BigInt.is_negative(d) do Err(FinanceError.InvalidRate)
@@ -33,6 +45,11 @@ mod FinanceRounding do
     end end
   end
 
+  doc """
+  Return exact BigInt 10^places for places refined to 0..255. Infallible for valid
+  arguments; runtime out-of-range input panics as a contract violation. Example:
+  power10(2) is 100.
+  """
   fn power10(places : {Int | _ >= 0 && _ <= 255}) : BigInt.BigInt do
     fn go(n : Int, acc : BigInt.BigInt) : BigInt.BigInt do
       if n <= 0 do acc else go(n - 1, BigInt.mul(acc, BigInt.from_int(10))) end

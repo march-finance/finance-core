@@ -1,5 +1,14 @@
+-- FinanceCodec — Strict quantity-only JSON v1. Exact amounts and precision are strings,
+-- not floating-point numbers. This module does not serialize journals or prove data
+-- authenticity.
+--
+-- Usage and tested examples: docs/guide.md and test/docs_quickstart_test.march.
+
 mod FinanceCodec do
-  doc "Versioned JSON: quantities and precision use strings to avoid float loss."
+  doc """
+  Encode q as JSON with exactly four string fields: version="1", asset, precision and
+  amount. Infallible; amount uses full native precision, preserving arbitrary-size atoms.
+  """
   fn encode(q : FinanceAmount.Quantity) : String do
     let a = FinanceAmount.quantity_asset(q)
     Json.to_string(Json.Object([
@@ -17,6 +26,12 @@ mod FinanceCodec do
     end
   end
 
+  doc """
+  Decode JSON v1 into a validated Quantity. InvalidEncoding for malformed JSON,
+  duplicate/missing/extra fields, nonstrings, unsupported version or noncanonical
+  precision text. Propagate asset/precision/decimal errors from smart constructors. Signed
+  amounts are accepted; no rounding occurs.
+  """
   fn decode(text : String) : Result(FinanceAmount.Quantity, FinanceError.Error) do
     let? value = Result.map_err(Json.parse(text), fn _ -> FinanceError.InvalidEncoding)
     let keys = match value do
