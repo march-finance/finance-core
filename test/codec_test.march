@@ -1,0 +1,40 @@
+mod FinanceCodecTest do
+  needs IO.Clock, IO.Process
+
+  test "quantity JSON preserves large values as strings" do
+    let a = FinanceTestSupport.expect_ok(FinanceAsset.asset("fiat:USD", 2))
+    let q = FinanceTestSupport.expect_ok(FinanceAmount.parse(a, "12345678901234567890.12"))
+    let restored = FinanceTestSupport.expect_ok(FinanceCodec.decode(FinanceCodec.encode(q)))
+    assert (FinanceAmount.format(restored) == FinanceAmount.format(q))
+  end
+
+  test "JSON rejects unknown versions malformed types and duplicate fields" do
+    List.each([
+      "{\"version\":\"2\",\"asset\":\"fiat:USD\",\"precision\":\"2\",\"amount\":\"1.00\"}",
+      "{\"version\":\"1\",\"asset\":\"fiat:USD\",\"precision\":\"2\",\"amount\":1.00}",
+      "{\"version\":\"1\",\"asset\":\"fiat:USD\",\"precision\":\"2\",\"amount\":\"1.00\",\"amount\":\"2.00\"}"
+    ], fn s -> assert (Result.is_err(FinanceCodec.decode(s))))
+  end
+
+  test "quantity JSON round trip property" do
+    Check.all(Gen.int(-1000000, 1000000), fn n ->
+      let a = FinanceTestSupport.expect_ok(FinanceAsset.asset("fiat:USD", 2))
+      let q = FinanceAmount.from_atoms(a, BigInt.from_int(n))
+      let r = FinanceTestSupport.expect_ok(FinanceCodec.decode(FinanceCodec.encode(q)))
+      FinanceAmount.format(q) == FinanceAmount.format(r) && FinanceAsset.asset_id(FinanceAmount.quantity_asset(r)) == "fiat:USD")
+  end
+
+  test "metadata validates source and chronology" do
+    assert (Result.is_err(FinanceMetadata.make("", 100, 100, None)))
+    assert (Result.is_err(FinanceMetadata.make("exchange", 101, 100, None)))
+    assert (Result.is_ok(FinanceMetadata.make("exchange", 100, 101, Some("fill:1"))))
+  end
+
+  test "metadata exposes source effective recorded and external id" do
+    let m = FinanceTestSupport.expect_ok(FinanceMetadata.make("exchange", 100, 101, Some("fill:1")))
+    assert (FinanceMetadata.source(m) == "exchange")
+    assert (FinanceMetadata.effective(m) == 100)
+    assert (FinanceMetadata.recorded(m) == 101)
+    assert (FinanceMetadata.external_id(m) == Some("fill:1"))
+  end
+end

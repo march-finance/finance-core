@@ -1,0 +1,99 @@
+mod FinanceAmount do
+  opaque type Quantity = QuantityValue(FinanceAsset.Asset, BigInt.BigInt)
+  doc "Construct a signed exact quantity in the asset's smallest unit."
+  fn from_atoms(a : FinanceAsset.Asset, units : BigInt.BigInt) : Quantity do
+    QuantityValue(a, units)
+  end
+
+  fn atoms(q : Quantity) : BigInt.BigInt do
+    match q do QuantityValue(_, units) -> units end
+  end
+
+  fn quantity_asset(q : Quantity) : FinanceAsset.Asset do
+    match q do QuantityValue(a, _) -> a end
+  end
+
+  doc "Add quantities only when identity and precision agree."
+  fn add(a : Quantity, b : Quantity) : Result(Quantity, FinanceError.Error) do
+    let aa = quantity_asset(a)
+    let ab = quantity_asset(b)
+    if FinanceAsset.asset_id(aa) == FinanceAsset.asset_id(ab) && FinanceAsset.precision(aa) == FinanceAsset.precision(ab) do
+      Ok(from_atoms(aa, BigInt.add(atoms(a), atoms(b))))
+    else Err(FinanceError.AssetMismatch) end
+  end
+
+  doc "Negate an exact quantity without changing its asset."
+  fn negate(q : Quantity) : Quantity do
+    from_atoms(quantity_asset(q), BigInt.negate(atoms(q)))
+  end
+
+  doc "Subtract quantities, rejecting conflicting asset identities or precision."
+  fn sub(a : Quantity, b : Quantity) : Result(Quantity, FinanceError.Error) do
+    add(a, negate(b))
+  end
+
+  pfn digits(s : String) : Bool do
+    String.byte_size(s) > 0 && List.all(string_chars(s), fn c -> c >= "0" && c <= "9")
+  end
+
+  pfn integer_digits(s : String) : BigInt.BigInt do
+    List.fold_left(string_chars(s), BigInt.zero(), fn (acc, c) ->
+      let value = match string_to_int(c) do
+        Some(n) -> n
+        None -> panic("internal decimal digit invariant")
+      end
+      BigInt.add(BigInt.mul(acc, BigInt.from_int(10)), BigInt.from_int(value)))
+  end
+
+  doc "Parse strict decimal text. Reject excess precision; never round silently."
+  fn parse(a : FinanceAsset.Asset, text : String) : Result(Quantity, FinanceError.Error) do
+    let negative = String.starts_with(text, "-")
+    let body = if negative do String.slice_bytes(text, 1, String.byte_size(text) - 1) else text end
+    let parts = String.split(body, ".")
+    let parsed = match parts do
+      Cons(whole, Nil) ->
+        if digits(whole) do Ok((whole, "")) else Err(FinanceError.InvalidDecimal) end
+      Cons(whole, Cons(frac, Nil)) ->
+        if digits(whole) && digits(frac) do Ok((whole, frac)) else Err(FinanceError.InvalidDecimal) end
+      _ -> Err(FinanceError.InvalidDecimal)
+    end
+    let? pair = parsed
+    let (whole, frac) = pair
+    let places = FinanceAsset.precision(a)
+    if String.byte_size(frac) > places do Err(FinanceError.PrecisionExceeded)
+    else
+      let units = integer_digits(whole ++ frac ++ String.repeat("0", places - String.byte_size(frac)))
+      Ok(from_atoms(a, if negative do BigInt.negate(units) else units end))
+    end
+  end
+
+  doc "Format with the asset's full precision; zero has no negative sign."
+  fn format(q : Quantity) : String do
+    let units = atoms(q)
+    let places = FinanceAsset.precision(quantity_asset(q))
+    let raw = BigInt.to_string(BigInt.abs(units))
+    let padded = String.pad_left(raw, places + 1, "0")
+    let n = String.byte_size(padded)
+    let sign = if BigInt.is_negative(units) do "-" else "" end
+    if places == 0 do sign ++ raw
+    else sign ++ String.slice_bytes(padded, 0, n - places) ++ "." ++ String.slice_bytes(padded, n - places, places) end
+  end
+  doc "Change accounting precision for the same asset using an explicit rounding policy."
+  fn rescale(q : Quantity, places : {Int | _ >= 0 && _ <= 255}, policy : FinanceRounding.Policy) : Result(Quantity, FinanceError.Error) do
+    let a = quantity_asset(q)
+    let? target = FinanceAsset.asset(FinanceAsset.asset_id(a), places)
+    let before = FinanceAsset.precision(a)
+    if places >= before do
+      let delta = places - before
+      if delta < 0 || delta > 255 do Err(FinanceError.InvalidPrecision)
+      else Ok(from_atoms(target, BigInt.mul(atoms(q), FinanceRounding.power10(delta)))) end
+    else
+      let delta = before - places
+      if delta < 0 || delta > 255 do Err(FinanceError.InvalidPrecision)
+      else
+        let? units = FinanceRounding.divide(atoms(q), FinanceRounding.power10(delta), policy)
+        Ok(from_atoms(target, units))
+      end
+    end
+  end
+end

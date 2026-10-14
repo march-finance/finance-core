@@ -1,0 +1,14 @@
+mod FinanceCore do
+  fn asset(id, places) do FinanceAsset.asset(id, places) end
+  fn asset_id(a) do FinanceAsset.asset_id(a) end
+  fn precision(a) : {Int | _ >= 0 && _ <= 255} do FinanceAsset.precision(a) end
+  fn from_atoms(a, units) do FinanceAmount.from_atoms(a, units) end
+  fn atoms(q) do FinanceAmount.atoms(q) end
+  fn quantity_asset(q) do FinanceAmount.quantity_asset(q) end
+  fn add(a, b) do FinanceAmount.add(a, b) end
+  fn sub(a, b) do FinanceAmount.sub(a, b) end
+  fn negate(q) do FinanceAmount.negate(q) end
+  fn parse(a, text) do FinanceAmount.parse(a, text) end
+  fn format(q) do FinanceAmount.format(q) end
+  fn rescale(q, places : {Int | _ >= 0 && _ <= 255}, policy) do FinanceAmount.rescale(q, places, policy) end
+end

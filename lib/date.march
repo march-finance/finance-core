@@ -1,0 +1,28 @@
+mod FinanceDate do
+  opaque type Date = CivilDate(DateTime.DateTime)
+
+  doc "Strict Gregorian YYYY-MM-DD, years 0001 through 9999. No market calendar assumptions."
+  fn parse(text : String) : Result(Date, FinanceError.Error) do
+    if String.byte_size(text) != 10 || String.slice_bytes(text, 0, 4) == "0000" do Err(FinanceError.InvalidMetadata)
+    else
+      let? dt = Result.map_err(DateTime.parse(text), fn _ -> FinanceError.InvalidMetadata)
+      if DateTime.format(dt, "%Y-%m-%d") != text do Err(FinanceError.InvalidMetadata)
+      else Ok(CivilDate(dt)) end
+    end
+  end
+
+  fn format(date : Date) : String do
+    match date do CivilDate(dt) -> DateTime.format(dt, "%Y-%m-%d") end
+  end
+
+  doc "Bounded civil-day arithmetic; rejects results outside the supported year range."
+  fn add_days(date : Date, days : {Int | _ >= -3652058 && _ <= 3652058}) : Result(Date, FinanceError.Error) do
+    if days < -3652058 || days > 3652058 do Err(FinanceError.InvalidMetadata)
+    else match date do
+      CivilDate(dt) ->
+        let seconds = DateTime.to_timestamp(dt) + days * 86400
+        if seconds < -62135596800 || seconds > 253402214400 do Err(FinanceError.InvalidMetadata)
+        else parse(DateTime.format(DateTime.from_timestamp(seconds), "%Y-%m-%d")) end
+    end end
+  end
+end

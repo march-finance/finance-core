@@ -1,0 +1,3 @@
+mod NegativePrecision do
+  fn main() do FinanceRounding.power10(-1) end
+end

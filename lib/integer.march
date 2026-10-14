@@ -1,0 +1,26 @@
+mod FinanceInteger do
+  doc "Magnitude long division for arbitrary size integers, with signed truncation toward zero."
+  fn divmod(n : BigInt.BigInt, d : BigInt.BigInt) : Result((BigInt.BigInt, BigInt.BigInt), FinanceError.Error) do
+    if BigInt.is_zero(d) do Err(FinanceError.DivisionByZero)
+    else
+      let divisor = BigInt.abs(d)
+      fn digit(r : BigInt.BigInt, count : Int) : (Int, BigInt.BigInt) do
+        if BigInt.lt(r, divisor) do (count, r)
+        else digit(BigInt.sub(r, divisor), count + 1) end
+      end
+      let result = List.fold_left(string_chars(BigInt.to_string(BigInt.abs(n))), (BigInt.zero(), BigInt.zero()), fn (acc, c) ->
+        let (q, r) = acc
+        let value = match string_to_int(c) do
+          Some(n) -> n
+          None -> panic("internal BigInt digit invariant")
+        end
+        let next = BigInt.add(BigInt.mul(r, BigInt.from_int(10)), BigInt.from_int(value))
+        let (value, remainder) = digit(next, 0)
+        (BigInt.add(BigInt.mul(q, BigInt.from_int(10)), BigInt.from_int(value)), remainder))
+      let (q, r) = result
+      let quotient = if BigInt.is_negative(n) != BigInt.is_negative(d) do BigInt.negate(q) else q end
+      let remainder = if BigInt.is_negative(n) do BigInt.negate(r) else r end
+      Ok((quotient, remainder))
+    end
+  end
+end

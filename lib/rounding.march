@@ -1,0 +1,43 @@
+mod FinanceRounding do
+  type Policy = Exact | TowardZero | AwayFromZero | Floor | Ceiling | HalfAway | HalfEven
+  derive Eq for Policy
+
+  doc "Divide signed integers with an explicit policy; denominator must be positive."
+  fn divide(n : BigInt.BigInt, d : BigInt.BigInt, policy : Policy) : Result(BigInt.BigInt, FinanceError.Error) do
+    if BigInt.is_zero(d) do Err(FinanceError.DivisionByZero)
+    else if BigInt.is_negative(d) do Err(FinanceError.InvalidRate)
+    else
+      let? pair = FinanceInteger.divmod(n, d)
+      let (q, remainder) = pair
+      let r = BigInt.abs(remainder)
+      if BigInt.is_zero(r) do Ok(q)
+      else
+        let negative = BigInt.is_negative(n)
+        let twice = BigInt.compare(BigInt.mul(r, BigInt.from_int(2)), d)
+        let? parity = FinanceInteger.divmod(q, BigInt.from_int(2))
+        let (_, odd_remainder) = parity
+        let odd = !BigInt.is_zero(odd_remainder)
+        let up = match policy do
+          Exact -> false
+          TowardZero -> false
+          AwayFromZero -> true
+          Floor -> negative
+          Ceiling -> !negative
+          HalfAway -> twice >= 0
+          HalfEven -> twice > 0 || (twice == 0 && odd)
+        end
+        if policy == Exact do Err(FinanceError.Inexact)
+        else if up do Ok(BigInt.add(q, BigInt.from_int(if negative do -1 else 1 end)))
+        else Ok(q) end end
+      end
+    end end
+  end
+
+  fn power10(places : {Int | _ >= 0 && _ <= 255}) : BigInt.BigInt do
+    fn go(n : Int, acc : BigInt.BigInt) : BigInt.BigInt do
+      if n <= 0 do acc else go(n - 1, BigInt.mul(acc, BigInt.from_int(10))) end
+    end
+    if places < 0 || places > 255 do panic("precision must be in 0..255")
+    else go(places, BigInt.one()) end
+  end
+end

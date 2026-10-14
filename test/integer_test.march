@@ -1,0 +1,41 @@
+mod FinanceIntegerTest do
+  needs IO.Clock, IO.Process
+  test "long division reconstructs the dividend and bounds remainder" do
+    Check.all(Gen.tuple2(Gen.int(-1000000, 1000000), Gen.int(1, 1000)), fn pair ->
+      let (n, d) = pair
+      let large = BigInt.add(BigInt.mul(BigInt.from_int(n), FinanceRounding.power10(24)), BigInt.from_int(n))
+      let divisor = BigInt.mul(BigInt.from_int(d), FinanceRounding.power10(12))
+      let (q, r) = FinanceTestSupport.expect_ok(FinanceInteger.divmod(large, divisor))
+      BigInt.eq(BigInt.add(BigInt.mul(q, divisor), r), large) && BigInt.lt(BigInt.abs(r), divisor))
+  end
+
+  test "long division agrees with machine arithmetic within its range" do
+    Check.all(Gen.tuple2(Gen.int(-1000000, 1000000), Gen.int(1, 1000)), fn pair ->
+      let (n, d) = pair
+      let (q, r) = FinanceTestSupport.expect_ok(FinanceInteger.divmod(BigInt.from_int(n), BigInt.from_int(d)))
+      BigInt.eq(q, BigInt.from_int(n / d)) && BigInt.eq(r, BigInt.from_int(n % d)))
+  end
+
+  test "rounding directed policies handle both signs" do
+    let d = BigInt.from_int(2)
+    let p = BigInt.from_int(5)
+    let n = BigInt.from_int(-5)
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(p, d, FinanceRounding.Floor))) == "2")
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(n, d, FinanceRounding.Floor))) == "-3")
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(p, d, FinanceRounding.Ceiling))) == "3")
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(n, d, FinanceRounding.Ceiling))) == "-2")
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(n, d, FinanceRounding.TowardZero))) == "-2")
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(n, d, FinanceRounding.AwayFromZero))) == "-3")
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(n, d, FinanceRounding.HalfAway))) == "-3")
+  end
+
+  test "floor and ceiling bracket exact ratios" do
+    Check.all(Gen.tuple2(Gen.int(-1000000, 1000000), Gen.int(1, 1000)), fn pair ->
+      let (n, d) = pair
+      let num = BigInt.from_int(n)
+      let den = BigInt.from_int(d)
+      let lo = FinanceTestSupport.expect_ok(FinanceRounding.divide(num, den, FinanceRounding.Floor))
+      let hi = FinanceTestSupport.expect_ok(FinanceRounding.divide(num, den, FinanceRounding.Ceiling))
+      BigInt.lte(BigInt.mul(lo, den), num) && BigInt.gte(BigInt.mul(hi, den), num))
+  end
+end

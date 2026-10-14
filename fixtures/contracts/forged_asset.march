@@ -1,0 +1,3 @@
+mod ForgedAsset do
+  fn main() do FinanceAsset.AssetValue("fiat:USD", -1) end
+end

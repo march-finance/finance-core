@@ -1,0 +1,38 @@
+mod FinanceAsset do
+  opaque type Asset = AssetValue(String, {Int | _ >= 0 && _ <= 255})
+  doc "Construct an asset using a canonical identity and native decimal precision."
+  fn asset(id : String, precision : Int) : Result(Asset, FinanceError.Error) do
+    if String.is_empty(id) || List.any(string_chars(id), fn c -> c <= " ") do Err(FinanceError.InvalidAssetId)
+    else if precision < 0 || precision > 255 do Err(FinanceError.InvalidPrecision)
+    else Ok(AssetValue(id, precision)) end end
+  end
+
+  fn asset_id(a : Asset) : String do
+    match a do AssetValue(id, _) -> id end
+  end
+
+  fn precision(a : Asset) : {Int | _ >= 0 && _ <= 255} do
+    match a do AssetValue(_, places) -> places end
+  end
+
+
+  doc "ISO-shaped fiat identifier: three uppercase ASCII letters. No currency registry is implied."
+  fn fiat(code : String, places : Int) : Result(Asset, FinanceError.Error) do
+    if String.byte_size(code) == 3 && List.all(string_chars(code), fn c -> c >= "A" && c <= "Z") do
+      asset("fiat:" ++ code, places)
+    else Err(FinanceError.InvalidAssetId) end
+  end
+
+  pfn component(s : String) : String do int_to_string(String.byte_size(s)) ++ ":" ++ s end
+
+  fn native(chain : String, places : Int) : Result(Asset, FinanceError.Error) do
+    if String.is_empty(chain) do Err(FinanceError.InvalidAssetId)
+    else asset("native:" ++ component(chain), places) end
+  end
+
+  doc "Length-prefix chain and contract/mint identifiers to avoid delimiter collisions."
+  fn token(chain : String, contract : String, places : Int) : Result(Asset, FinanceError.Error) do
+    if String.is_empty(chain) || String.is_empty(contract) do Err(FinanceError.InvalidAssetId)
+    else asset("token:" ++ component(chain) ++ ":" ++ component(contract), places) end
+  end
+end

@@ -1,0 +1,3 @@
+mod FinanceError do
+  type Error = InvalidAssetId | InvalidPrecision | AssetMismatch | InvalidDecimal | PrecisionExceeded | DivisionByZero | Inexact | InvalidRate | InvalidMetadata | InvalidEncoding
+end

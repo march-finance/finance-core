@@ -1,0 +1,4 @@
+.march/
+.forge/
+*.ll
+*.o

@@ -1,0 +1,90 @@
+mod FinanceCoreTest do
+  test "asset construction rejects empty identity and negative precision" do
+    assert (match FinanceCore.asset("", 2) do
+      Err(_) -> true
+      _ -> false
+    end)
+    assert (match FinanceCore.asset("fiat:USD", -1) do
+      Err(_) -> true
+      _ -> false
+    end)
+  end
+
+  test "quantity addition exceeds machine integer range exactly" do
+    let a = FinanceTestSupport.expect_ok(FinanceCore.asset("chain:ethereum:native", 18))
+    let units = BigInt.mul(BigInt.from_int(10000000000), BigInt.from_int(10000000000))
+    let q = FinanceCore.from_atoms(a, units)
+    let sum = FinanceTestSupport.expect_ok(FinanceCore.add(q, q))
+    assert (BigInt.to_string(FinanceCore.atoms(sum)) == "200000000000000000000")
+  end
+
+  test "same ticker tokens on different chains cannot be added" do
+    let eth = FinanceTestSupport.expect_ok(FinanceCore.asset("ethereum:token:USDC", 6))
+    let sol = FinanceTestSupport.expect_ok(FinanceCore.asset("solana:token:USDC", 6))
+    assert (match FinanceCore.add(FinanceCore.from_atoms(eth, BigInt.one()), FinanceCore.from_atoms(sol, BigInt.one())) do
+      Err(_) -> true
+      _ -> false
+    end)
+  end
+
+  test "subtraction produces signed balances" do
+    let usd = FinanceTestSupport.expect_ok(FinanceCore.asset("fiat:USD", 2))
+    let a = FinanceCore.from_atoms(usd, BigInt.from_int(100))
+    let b = FinanceCore.from_atoms(usd, BigInt.from_int(250))
+    let result = FinanceTestSupport.expect_ok(FinanceCore.sub(a, b))
+    assert (BigInt.to_string(FinanceCore.atoms(result)) == "-150")
+  end
+
+  test "conflicting precision for the same identity is rejected" do
+    let a = FinanceTestSupport.expect_ok(FinanceCore.asset("fiat:USD", 2))
+    let b = FinanceTestSupport.expect_ok(FinanceCore.asset("fiat:USD", 3))
+    assert (match FinanceCore.add(FinanceCore.from_atoms(a, BigInt.one()), FinanceCore.from_atoms(b, BigInt.one())) do
+      Err(_) -> true
+      _ -> false
+    end)
+  end
+  test "decimal text round trips large signed crypto quantities" do
+    let eth = FinanceTestSupport.expect_ok(FinanceCore.asset("ethereum:native", 18))
+    let q = FinanceTestSupport.expect_ok(FinanceCore.parse(eth, "-12345678901234567890.123456789012345678"))
+    assert (FinanceCore.format(q) == "-12345678901234567890.123456789012345678")
+  end
+
+  test "decimal parsing rejects malformed input and excess precision" do
+    let usd = FinanceTestSupport.expect_ok(FinanceCore.asset("fiat:USD", 2))
+    List.each(["", "-", ".1", "1.", "1.2.3", " 1", "1e2", "+1", "abc", "1.001"], fn s ->
+      assert (match FinanceCore.parse(usd, s) do
+        Err(_) -> true
+        _ -> false
+      end))
+  end
+
+  test "format pads fractional digits and normalizes negative zero" do
+    let usd = FinanceTestSupport.expect_ok(FinanceCore.asset("fiat:USD", 2))
+    assert (FinanceCore.format(FinanceTestSupport.expect_ok(FinanceCore.parse(usd, "-0.00"))) == "0.00")
+    assert (FinanceCore.format(FinanceTestSupport.expect_ok(FinanceCore.parse(usd, "1.2"))) == "1.20")
+    assert (FinanceCore.format(FinanceCore.from_atoms(usd, BigInt.from_int(-1))) == "-0.01")
+  end
+
+  test "negation flips sign preserves asset and keeps zero unsigned" do
+    let usd = FinanceTestSupport.expect_ok(FinanceCore.asset("fiat:USD", 2))
+    let q = FinanceCore.from_atoms(usd, BigInt.from_int(5))
+    let n = FinanceAmount.negate(q)
+    assert (BigInt.to_string(FinanceAmount.atoms(n)) == "-5")
+    assert (FinanceAsset.asset_id(FinanceAmount.quantity_asset(n)) == "fiat:USD")
+    assert (BigInt.to_string(FinanceAmount.atoms(FinanceAmount.negate(n))) == "5")
+    let zero = FinanceAmount.negate(FinanceCore.from_atoms(usd, BigInt.zero()))
+    assert (BigInt.to_string(FinanceAmount.atoms(zero)) == "0")
+  end
+
+  test "facade exposes asset metadata negation and rescale" do
+    let usd = FinanceTestSupport.expect_ok(FinanceCore.asset("fiat:USD", 2))
+    assert (FinanceCore.asset_id(usd) == "fiat:USD")
+    assert (FinanceCore.precision(usd) == 2)
+    let q = FinanceCore.from_atoms(usd, BigInt.from_int(7))
+    let n = FinanceCore.negate(q)
+    assert (BigInt.to_string(FinanceCore.atoms(n)) == "-7")
+    assert (FinanceCore.asset_id(FinanceCore.quantity_asset(n)) == "fiat:USD")
+    let r = FinanceTestSupport.expect_ok(FinanceCore.rescale(q, 1, FinanceRounding.HalfEven))
+    assert (FinanceCore.format(r) == "0.1")
+  end
+end

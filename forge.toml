@@ -1,0 +1,9 @@
+[package]
+name = "finance-core"
+version = "0.1.0"
+type = "lib"
+description = "Exact asset quantities for traditional finance and crypto"
+author = ""
+license = "MIT"
+
+[deps]

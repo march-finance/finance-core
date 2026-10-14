@@ -1,0 +1,16 @@
+mod FinanceQuote do
+  opaque type Quote = QuoteValue(FinanceRate.Rate, FinanceMetadata.Metadata)
+
+  doc "Attach explicit source and observation/recording times to a directional rate."
+  fn make(rate : FinanceRate.Rate, metadata : FinanceMetadata.Metadata) : Quote do
+    QuoteValue(rate, metadata)
+  end
+
+  fn metadata(q : Quote) : FinanceMetadata.Metadata do
+    match q do QuoteValue(_, meta) -> meta end
+  end
+
+  fn convert(q : Quote, amount : FinanceAmount.Quantity, policy : FinanceRounding.Policy) : Result(FinanceRate.Conversion, FinanceError.Error) do
+    match q do QuoteValue(rate, _) -> FinanceRate.convert_report(rate, amount, policy) end
+  end
+end

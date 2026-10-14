@@ -1,0 +1,32 @@
+mod FinanceIdentityTest do
+  test "structured identifiers cannot alias across chain contract boundaries" do
+    let a = FinanceTestSupport.expect_ok(FinanceAsset.token("a:b", "c", 6))
+    let b = FinanceTestSupport.expect_ok(FinanceAsset.token("a", "b:c", 6))
+    assert (FinanceAsset.asset_id(a) != FinanceAsset.asset_id(b))
+    assert (Result.is_err(FinanceAsset.token("", "contract", 6)))
+    assert (Result.is_err(FinanceAsset.fiat("usd", 2)))
+    assert (Result.is_ok(FinanceAsset.fiat("USD", 2)))
+  end
+
+  test "precision is bounded and malformed identities fail" do
+    assert (Result.is_err(FinanceAsset.asset("test", 256)))
+    assert (Result.is_err(FinanceAsset.asset(" test", 2)))
+    assert (Result.is_err(FinanceAsset.asset("te st", 2)))
+  end
+
+  test "native assets length-prefix the chain identity" do
+    let a = FinanceTestSupport.expect_ok(FinanceAsset.native("ethereum:mainnet", 18))
+    assert (FinanceAsset.asset_id(a) == "native:16:ethereum:mainnet")
+    assert (FinanceAsset.precision(a) == 18)
+    let direct = FinanceTestSupport.expect_ok(FinanceAsset.asset("native:16:ethereum:mainnet", 18))
+    assert (FinanceAsset.asset_id(a) == FinanceAsset.asset_id(direct))
+  end
+
+  test "native chain delimiters cannot collide with plain chains" do
+    let a = FinanceTestSupport.expect_ok(FinanceAsset.native("a:b", 6))
+    let b = FinanceTestSupport.expect_ok(FinanceAsset.native("a", 6))
+    assert (FinanceAsset.asset_id(a) != FinanceAsset.asset_id(b))
+    assert (Result.is_err(FinanceAsset.native("", 6)))
+    assert (Result.is_err(FinanceAsset.native("ethereum", 256)))
+  end
+end

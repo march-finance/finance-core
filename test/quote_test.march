@@ -1,0 +1,15 @@
+mod FinanceQuoteTest do
+  test "quote preserves provenance and conversion residual" do
+    let a = FinanceTestSupport.expect_ok(FinanceAsset.fiat("USD", 2))
+    let b = FinanceTestSupport.expect_ok(FinanceAsset.fiat("EUR", 2))
+    let rate = FinanceTestSupport.expect_ok(FinanceRate.make(a, b, BigInt.from_int(9), BigInt.from_int(10)))
+    let meta = FinanceTestSupport.expect_ok(FinanceMetadata.make("example-feed", 100, 101, Some("quote-1")))
+    let quote = FinanceQuote.make(rate, meta)
+    let amount = FinanceTestSupport.expect_ok(FinanceAmount.parse(a, "10.00"))
+    let result = FinanceTestSupport.expect_ok(FinanceQuote.convert(quote, amount, FinanceRounding.Exact))
+    assert (FinanceAmount.format(result.quantity) == "9.00")
+    assert (FinanceMetadata.source(FinanceQuote.metadata(quote)) == "example-feed")
+    assert (FinanceMetadata.external_id(FinanceQuote.metadata(quote)) == Some("quote-1"))
+    assert (BigInt.is_zero(result.residual_numerator))
+  end
+end

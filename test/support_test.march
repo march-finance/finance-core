@@ -1,0 +1,8 @@
+mod FinanceTestSupport do
+  fn expect_ok(value : Result(a, e)) : a do
+    match value do
+      Ok(result) -> result
+      Err(_) -> panic("expected Ok in test")
+    end
+  end
+end

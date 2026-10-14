@@ -1,0 +1,19 @@
+mod FinanceMetadata do
+  opaque type Metadata = MetadataValue(String, Int, Int, Option(String))
+
+  doc "UTC Unix seconds, supplied by callers: no ambient clock dependency."
+  fn make(source : String, effective : Int, recorded : Int, external_id : Option(String)) : Result(Metadata, FinanceError.Error) do
+    let valid_id = match external_id do
+      None -> true
+      Some(id) -> String.byte_size(String.trim(id)) > 0
+    end
+    if String.byte_size(String.trim(source)) == 0 || effective > recorded || !valid_id do
+      Err(FinanceError.InvalidMetadata)
+    else Ok(MetadataValue(source, effective, recorded, external_id)) end
+  end
+
+  fn source(m : Metadata) : String do match m do MetadataValue(s, _, _, _) -> s end end
+  fn effective(m : Metadata) : Int do match m do MetadataValue(_, t, _, _) -> t end end
+  fn recorded(m : Metadata) : Int do match m do MetadataValue(_, _, t, _) -> t end end
+  fn external_id(m : Metadata) : Option(String) do match m do MetadataValue(_, _, _, id) -> id end end
+end

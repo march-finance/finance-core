@@ -1,0 +1,46 @@
+mod FinanceCodec do
+  doc "Versioned JSON: quantities and precision use strings to avoid float loss."
+  fn encode(q : FinanceAmount.Quantity) : String do
+    let a = FinanceAmount.quantity_asset(q)
+    Json.to_string(Json.Object([
+      ("version", Json.Str("1")),
+      ("asset", Json.Str(FinanceAsset.asset_id(a))),
+      ("precision", Json.Str(int_to_string(FinanceAsset.precision(a)))),
+      ("amount", Json.Str(FinanceAmount.format(q)))
+    ]))
+  end
+
+  pfn field(value : Json.JsonValue, key : String) : Result(String, FinanceError.Error) do
+    match Json.get(value, key) do
+      Some(Json.Str(s)) -> Ok(s)
+      _ -> Err(FinanceError.InvalidEncoding)
+    end
+  end
+
+  fn decode(text : String) : Result(FinanceAmount.Quantity, FinanceError.Error) do
+    let? value = Result.map_err(Json.parse(text), fn _ -> FinanceError.InvalidEncoding)
+    let keys = match value do
+      Json.Object(pairs) -> List.map(pairs, fn pair -> match pair do (key, _) -> key end)
+      _ -> Nil
+    end
+    if List.length(keys) != 4 || List.length(List.dedup(keys)) != 4 do Err(FinanceError.InvalidEncoding)
+    else
+      let? version = field(value, "version")
+      let? id = field(value, "asset")
+      let? places = field(value, "precision")
+      let? amount = field(value, "amount")
+      if version != "1" do Err(FinanceError.InvalidEncoding)
+      else
+        match string_to_int(places) do
+          None -> Err(FinanceError.InvalidEncoding)
+          Some(p) ->
+            if int_to_string(p) != places do Err(FinanceError.InvalidEncoding)
+            else
+              let? a = FinanceAsset.asset(id, p)
+              FinanceAmount.parse(a, amount)
+            end
+        end
+      end
+    end
+  end
+end

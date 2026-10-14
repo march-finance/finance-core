@@ -1,0 +1,55 @@
+mod FinanceConversionTest do
+  needs IO.Clock, IO.Process
+  test "rates convert whole units across different native scales" do
+    let eth = FinanceTestSupport.expect_ok(FinanceAsset.asset("ethereum:native", 18))
+    let usd = FinanceTestSupport.expect_ok(FinanceAsset.asset("fiat:USD", 2))
+    let rate = FinanceTestSupport.expect_ok(FinanceRate.make(eth, usd, BigInt.from_int(2000), BigInt.one()))
+    let amount = FinanceTestSupport.expect_ok(FinanceAmount.parse(eth, "0.001"))
+    let converted = FinanceTestSupport.expect_ok(FinanceRate.convert(rate, amount, FinanceRounding.Exact))
+    assert (FinanceAmount.format(converted) == "2.00")
+    assert (Result.is_err(FinanceRate.convert(rate, converted, FinanceRounding.Exact)))
+  end
+
+  test "rescaling is explicit and exact mode detects loss" do
+    let asset = FinanceTestSupport.expect_ok(FinanceAsset.asset("test:asset", 3))
+    let q = FinanceTestSupport.expect_ok(FinanceAmount.parse(asset, "-1.235"))
+    let r = FinanceTestSupport.expect_ok(FinanceAmount.rescale(q, 2, FinanceRounding.HalfEven))
+    assert (FinanceAmount.format(r) == "-1.24")
+    assert (Result.is_err(FinanceAmount.rescale(q, 2, FinanceRounding.Exact)))
+  end
+
+  test "rescale up and down preserves atoms with exact policy" do
+    Check.all(Gen.int(-100000, 100000), fn n ->
+      let a = FinanceTestSupport.expect_ok(FinanceAsset.asset("test:asset", 2))
+      let q = FinanceAmount.from_atoms(a, BigInt.from_int(n))
+      let up = FinanceTestSupport.expect_ok(FinanceAmount.rescale(q, 8, FinanceRounding.Exact))
+      let down = FinanceTestSupport.expect_ok(FinanceAmount.rescale(up, 2, FinanceRounding.Exact))
+      BigInt.eq(FinanceAmount.atoms(q), FinanceAmount.atoms(down)))
+  end
+
+  test "invalid rate ratios are rejected" do
+    let a = FinanceTestSupport.expect_ok(FinanceAsset.asset("fiat:USD", 2))
+    assert (Result.is_err(FinanceRate.make(a, a, BigInt.zero(), BigInt.one())))
+    assert (Result.is_err(FinanceRate.make(a, a, BigInt.one(), BigInt.zero())))
+  end
+  test "conversion reports exact rational rounding residual" do
+    let a = FinanceTestSupport.expect_ok(FinanceAsset.asset("test:a", 0))
+    let b = FinanceTestSupport.expect_ok(FinanceAsset.asset("test:b", 0))
+    let rate = FinanceTestSupport.expect_ok(FinanceRate.make(a, b, BigInt.one(), BigInt.from_int(2)))
+    let report = FinanceTestSupport.expect_ok(FinanceRate.convert_report(rate, FinanceAmount.from_atoms(a, BigInt.one()), FinanceRounding.HalfEven))
+    assert (FinanceAmount.format(report.quantity) == "0")
+    assert (BigInt.to_string(report.residual_numerator) == "1")
+    assert (BigInt.to_string(report.residual_denominator) == "2")
+  end
+
+  test "exact invertible rates restore source amounts" do
+    Check.all(Gen.int(-1000000, 1000000), fn n ->
+      let a = FinanceTestSupport.expect_ok(FinanceAsset.asset("test:a", 2))
+      let b = FinanceTestSupport.expect_ok(FinanceAsset.asset("test:b", 4))
+      let rate = FinanceTestSupport.expect_ok(FinanceRate.make(a, b, BigInt.from_int(3), BigInt.one()))
+      let q = FinanceAmount.from_atoms(a, BigInt.from_int(n))
+      let converted = FinanceTestSupport.expect_ok(FinanceRate.convert(rate, q, FinanceRounding.Exact))
+      let restored = FinanceTestSupport.expect_ok(FinanceRate.convert(FinanceRate.invert(rate), converted, FinanceRounding.Exact))
+      BigInt.eq(FinanceAmount.atoms(restored), FinanceAmount.atoms(q)))
+  end
+end

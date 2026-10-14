@@ -1,0 +1,42 @@
+mod FinancePropertiesTest do
+  needs IO.Clock, IO.Process
+  pfn usd() do FinanceTestSupport.expect_ok(FinanceCore.asset("fiat:USD", 2)) end
+
+  test "format parse identity across signs and scales" do
+    Check.all(Gen.tuple2(Gen.int(-1000000, 1000000), Gen.int(0, 18)), fn pair ->
+      let (n, places) = pair
+      let a = FinanceTestSupport.expect_ok(FinanceCore.asset("test:asset", places))
+      let q = FinanceCore.from_atoms(a, BigInt.from_int(n))
+      let r = FinanceTestSupport.expect_ok(FinanceCore.parse(a, FinanceCore.format(q)))
+      BigInt.eq(FinanceCore.atoms(q), FinanceCore.atoms(r)))
+  end
+
+  test "addition is commutative and subtraction undoes it" do
+    Check.all(Gen.tuple2(Gen.int(-1000000, 1000000), Gen.int(-1000000, 1000000)), fn pair ->
+      let (x, y) = pair
+      let a = FinanceCore.from_atoms(usd(), BigInt.from_int(x))
+      let b = FinanceCore.from_atoms(usd(), BigInt.from_int(y))
+      let ab = FinanceTestSupport.expect_ok(FinanceCore.add(a, b))
+      let ba = FinanceTestSupport.expect_ok(FinanceCore.add(b, a))
+      let original = FinanceTestSupport.expect_ok(FinanceCore.sub(ab, b))
+      BigInt.eq(FinanceCore.atoms(ab), FinanceCore.atoms(ba)) && BigInt.eq(FinanceCore.atoms(original), FinanceCore.atoms(a)))
+  end
+
+  test "half even rounds signed ties to an even atom" do
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(BigInt.from_int(5), BigInt.from_int(2), FinanceRounding.HalfEven))) == "2")
+    assert (BigInt.to_string(FinanceTestSupport.expect_ok(FinanceRounding.divide(BigInt.from_int(-7), BigInt.from_int(2), FinanceRounding.HalfEven))) == "-4")
+  end
+
+  test "exact division rejects loss and zero denominator" do
+    assert (Result.is_err(FinanceRounding.divide(BigInt.one(), BigInt.from_int(2), FinanceRounding.Exact)))
+    assert (Result.is_err(FinanceRounding.divide(BigInt.one(), BigInt.zero(), FinanceRounding.HalfEven)))
+  end
+
+  test "rounding is odd for symmetric policies" do
+    Check.all(Gen.tuple2(Gen.int(-100000, 100000), Gen.int(1, 1000)), fn pair ->
+      let (n, d) = pair
+      let a = FinanceTestSupport.expect_ok(FinanceRounding.divide(BigInt.from_int(n), BigInt.from_int(d), FinanceRounding.HalfEven))
+      let b = FinanceTestSupport.expect_ok(FinanceRounding.divide(BigInt.from_int(-n), BigInt.from_int(d), FinanceRounding.HalfEven))
+      BigInt.eq(a, BigInt.negate(b)))
+  end
+end
