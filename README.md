@@ -4,10 +4,16 @@
 
 Licensed under the [MIT License](LICENSE).
 
+## Documentation
+
+Start with the [library guide](docs/guide.md) for installation, a complete tested
+quickstart, API usage, error handling and operational limits. The
+[quickstart source](test/docs_quickstart_test.march) runs in the normal test suite.
+This README provides the module overview and detailed reference notes below.
+
 ## GitHub checkout and CI
 
-Clone the repositories into the same parent directory so Forge's sibling path
-dependencies resolve (finance-crypto is test-only for finance-codec integration):
+Clone this repository; finance-core has no external package dependencies:
 
 ```sh
 git clone https://github.com/march-finance/finance-core.git
@@ -17,7 +23,7 @@ forge test --seed=42
 
 GitHub Actions runs on pushes, pull requests and manual dispatches. It installs
 the pinned March 0.5.0 release, checks/builds this package, and runs debug/release
-tests and properties. Dependencies are checked out from their `main` branches.
+tests and properties. No sibling repositories are required.
 Compile-time contract checks run with Z3.
 
 March library for exact amounts shared by traditional finance and crypto.
@@ -121,8 +127,9 @@ symmetry/bracketing, rescaling, and exact rate inversion. Regression cases cover
 large crypto values, signed ties, cross-chain identity, malformed JSON, leap
 days, and provenance.
 
-Contract checks require Z3 and a current March compiler. They use the active
-Forge toolchain by default; set `MARCH_COMPILER` to override the compiler.
+Contract checks require Z3 and a current March compiler. They use
+`~/.march/current/bin/march` (or `march` on PATH as a fallback); set
+`MARCH_COMPILER` to the pinned compiler path when your current version differs.
 March's refinement checker is not a complete proof system: unverified
 obligations are not proof of correctness. Runtime validation and executable
 tests remain essential.

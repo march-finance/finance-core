@@ -1,0 +1,19 @@
+mod CoreQuickstart do
+  needs IO.Clock, IO.Process
+
+  fn example() : Result(String, FinanceError.Error) do
+    let? usd = FinanceAsset.fiat("USD", 2)
+    let? eur = FinanceAsset.fiat("EUR", 2)
+    let? amount = FinanceAmount.parse(usd, "12.50")
+    let? rate = FinanceRate.make(usd, eur, BigInt.from_int(9), BigInt.from_int(10))
+    let? report = FinanceRate.convert_report(rate, amount, FinanceRounding.Exact)
+    Ok(FinanceAmount.format(report.quantity))
+  end
+
+  test "documented exact conversion" do
+    assert (match example() do
+      Ok(value) -> value == "11.25"
+      Err(_) -> false
+    end)
+  end
+end
